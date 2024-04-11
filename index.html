@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="./src/stack-chess.css">
+    <link rel="stylesheet" href="./style.css">
+    <title>Stack Chess</title>
+</head>
+<body>
+<div class="board"></div>
+<div class="sweep-box">Hover your piece to here to <i>sweep</i>!</div>
+</body>
+<script type="module">
+    import {StackChess} from "./src/stack-chess.js";
+
+    const game = new StackChess;
+    game.setDiv(
+        document.querySelector(".board"),
+        document.querySelector(".sweep-box")
+    );
+    game.reset();
+</script>
+</html>

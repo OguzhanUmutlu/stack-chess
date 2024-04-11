@@ -1,0 +1,57 @@
+.board {
+    position: absolute;
+    left: 50%;
+    bottom: 5%;
+    translate: -50%;
+    height: 80%;
+    aspect-ratio: 1 / 1;
+    background: url("../assets/board.png");
+    background-size: 100% 100%;
+    user-select: none;
+}
+
+.coordinate-dark, .coordinate-light {
+    font-weight: 600;
+}
+
+.coordinate-light {
+    fill: #739552;
+}
+
+.coordinate-dark {
+    fill: #EBECD0;
+}
+
+.piece-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.square {
+    position: absolute;
+    width: 12.5%;
+    height: 12.5%;
+    display: flex;
+}
+
+.piece {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-size: 100% 100%;
+    cursor: grab;
+    margin-left: 10px;
+    margin-top: -10px;
+}
+
+.piece:first-child {
+    margin: 0;
+}
+
+.dragging-piece {
+    translate: -50% -50%;
+    width: 12.5%;
+    height: 12.5%;
+    margin: 0;
+}
