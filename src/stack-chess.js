@@ -292,6 +292,19 @@ export class StackChess {
 
         this.__rerender();
 
+        const promotionMenu = document.createElement("div");
+        div.appendChild(promotionMenu);
+        promotionMenu.innerHTML = `<div class="promote">
+            <div class="text">Pick a piece to promote your pawn to:</div>
+            <div class="promote-options">
+                <div data-promote="q"></div>
+                <div data-promote="r"></div>
+                <div data-promote="b"></div>
+                <div data-promote="n"></div>
+            </div>
+        </div>`
+        promotionMenu.classList.add("promotion-menu");
+
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 
         svg.setAttribute("viewBox", "0 0 100 100");
@@ -342,12 +355,11 @@ export class StackChess {
 
         function showPromotionMenu(piece) {
             return new Promise(r => {
-                const pDiv = document.querySelector(".promotion-menu");
-                pDiv.style.opacity = "1";
-                pDiv.style.pointerEvents = "all";
+                promotionMenu.style.opacity = "1";
+                promotionMenu.style.pointerEvents = "all";
                 promoteListeners.push(t => {
-                    pDiv.style.opacity = "0";
-                    pDiv.style.pointerEvents = "none";
+                    promotionMenu.style.opacity = "0";
+                    promotionMenu.style.pointerEvents = "none";
                     r(t);
                 });
                 for (const d of document.querySelectorAll(".promote-options > div")) {
