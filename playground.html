@@ -10,7 +10,11 @@
     <title>Stack Chess</title>
 </head>
 <body>
-<div class="board"></div>
+<div class="board">
+    <div class="flip"></div>
+    <div class="undo"></div>
+    <div class="reset"></div>
+</div>
 <div class="sweep-box">Drag your piece here to <i>sweep</i> it!</div>
 </body>
 <script type="module">
@@ -20,6 +24,27 @@
         document.querySelector(".sweep-box")
     );
     game.reset();
+    document.querySelector(".flip").addEventListener("click", () => game.flip());
+    document.querySelector(".undo").addEventListener("click", () => game.undo());
+    document.querySelector(".reset").addEventListener("click", () => game.reset());
+    /*let hisR = localStorage.getItem("chess_history");
+    let pieceR = localStorage.getItem("chess_pieces");
+    if (hisR) {
+        game.history = JSON.parse(hisR);
+        game.pieces = JSON.parse(pieceR);
+        for (let i = 0; i < 64; i++) {
+            const p = game.pieces[i];
+            for (const piece of p) {
+                game.__renderPut(i % 8, Math.floor(i / 8), piece.type);
+            }
+        }
+    } else game.reset();
+    setInterval(() => {
+        return;
+        localStorage.setItem("chess_history", JSON.stringify(game.history));
+        localStorage.setItem("chess_pieces", JSON.stringify(game.pieces));
+    }, 1000);*/
+    window.game = game;
 </script>
 <style>
     body {
@@ -27,6 +52,34 @@
         background: #2a2626;
         overflow: hidden;
         color: white;
+    }
+
+    .flip, .reset, .undo {
+        position: absolute;
+        left: 0;
+        top: -40px;
+        width: 32px;
+        height: 32px;
+        background-size: 100% 100%;
+        cursor: pointer;
+    }
+
+    .flip {
+        background-image: url("./assets/flip.png");
+    }
+
+    .reset {
+        left: 85px;
+        background-image: url("./assets/reset.png");
+    }
+
+    .undo {
+        left: 40px;
+        background-image: url("./assets/undo.png");
+    }
+
+    .flip:hover, .reset:hover, .undo:hover {
+        scale: 1.1;
     }
 
     .sweep-box {
