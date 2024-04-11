@@ -21,6 +21,14 @@
         document.querySelector(".board"),
         document.querySelector(".sweep-box")
     );
-    game.reset();
+    game.put(5, 5, "bk");
+    game.put(4, 7, "wk");
+    game.put(7, 7, "wr");
+    game.put(0, 7, "wr");
+    game.put(5, 3, "wp");
+    game.put(4, 1, "bp");
+    game.put(6, 3, "wp");
+    game.movePiece(4, 7, 3, 7);
+    game.movePiece(4, 1, 4, 3);
 </script>
 </html>

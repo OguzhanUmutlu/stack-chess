@@ -39,12 +39,13 @@ const GetAllMoveList = {
         if (diaLeft) mv(x - 1, y + k);
         if (diaRight) mv(x + 1, y + k);
         const h = board.history.at(-1);
-        if (h) {
-            const left = board.get(x - 1, y)[0];
-            const right = board.get(x + 1, y)[0];
-            if (left && h.x2 === left.x && h.y2 === left.y) mv(x - 1, y + k, true);
-            if (right && h.x2 === right.x && h.y2 === right.y) mv(x + 1, y + k, true);
-        }
+        if (
+            h && h.type === "move"
+            && Math.abs(h.y1 - h.y2) === 2
+            && h.piece.type[1] === "p"
+            && y === h.y2
+            && Math.abs(x - h.x2) === 1
+        ) mv(h.x2, y + k);
     },
     r(piece, x, y, board, mv) {
         __straightPathAll([
@@ -95,15 +96,15 @@ const GetAllMoveList = {
         }
 
         if (board.history.every(i => i[0] !== "move" || i[1] !== piece.type[0] + "k")) {
-            for (const X of [0, 7]) {
-                const rook = board.get(X, y)[0];
+            for (const [X, dx] of [[0, -2], [7, 2]]) {
+                const rook = board.get(X, y);
                 if (
                     rook.length === 1
-                    && board.history.every(i => i[0] !== "move" || i[1] !== piece.type[0] + "r" || i[2] !== 7 || i[3] !== y)
-                    && rook[0] === piece.type[0] + "r"
+                    && board.history.every(i => i.type !== "move" || i.piece !== rook || i.x1 !== X || i.y1 !== y)
+                    && rook[0].type === piece.type[0] + "r"
                 ) {
                     if (noSquares.some(i => i[0] === x + 2 && i[1] === y)) continue;
-                    mv(x + 2, y);
+                    mv(x + dx, y);
                 }
             }
         }
@@ -136,7 +137,6 @@ export class StackChess {
         if (!piece) return;
         const p = [];
         GetAllMoveList[piece.type[1]](piece, x, y, this, (x, y) => {
-            if (x < 0 || x > 7 || y < 0 || y > 7) return;
             const get = this.get(x, y)[0];
             if (!get || get.type[0] !== piece.type[0]) p.push([x, y]);
         });
@@ -144,6 +144,7 @@ export class StackChess {
     };
 
     get(x, y) {
+        if (x < 0 || x > 7 || y < 0 || y > 7) return [];
         return this.pieces[y * 8 + x];
     };
 
@@ -191,10 +192,36 @@ export class StackChess {
         ) return false;
         sq.shift();
         this.get(x2, y2).unshift(piece);
+        const isPromotion = piece.type[1] === "p" && y2 === (piece.type[0] === "w" ? 0 : 7);
+        const isCastleLeft = piece.type[1] === "k" && x1 - x2 === 2;
+        const isCastleRight = piece.type[1] === "k" && x2 - x1 === 2;
+        const isEnPassant = piece.type[1] === "p" && this.get(x2, y2).length === 1 && x1 !== x2;
+        if (isPromotion) {
+            piece.type = piece.type[0] + promotion;
+        }
+        if (isCastleLeft) {
+            const rook = this.get(0, y2).shift();
+            this.get(3, y2).unshift(rook);
+            if (this.div) this.__renderMove(rook, 0, y2, 3, y2);
+        }
+        if (isCastleRight) {
+            const rook = this.get(7, y2).shift();
+            this.get(5, y2).unshift(rook);
+            if (this.div) this.__renderMove(rook, 7, y2, 5, y2);
+        }
+        if (isEnPassant) {
+            const mv = this.turn ? -1 : 1;
+            const pawn = this.get(x2, y2 - mv).shift();
+            this.get(x2, y2).push(pawn);
+            if (this.div) this.__renderMove(pawn, x2, y2 - mv, x2, y2);
+        }
         this.history.push({
             type: "move",
             piece: piece,
-            x1, y1, x2, y2
+            x1, y1, x2, y2,
+            isPromotion,
+            isCastleLeft,
+            isCastleRight
         });
         piece.hasMoved = true;
         this.turn = !this.turn;
@@ -292,6 +319,13 @@ export class StackChess {
         let hoveringSweep = false;
         sweepBox.addEventListener("mouseenter", () => hoveringSweep = true);
         sweepBox.addEventListener("mouseleave", () => hoveringSweep = false);
+
+        const pos = (x, y) => {
+            const R = div.getBoundingClientRect();
+            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
+            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
+        };
+
         addEventListener("mousedown", e => {
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
@@ -303,8 +337,7 @@ export class StackChess {
             const piece = this.get(X, Y)[0];
             if (!piece || (piece.type[0] === "w") !== this.turn) return;
             holdingPiece = document.querySelector(`[piece-x="${X}"][piece-y="${Y}"][piece-index="0"]`);
-            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
-            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
+            pos(x, y);
             holdingPiece.classList.add("dragging-piece");
         });
         addEventListener("mousemove", e => {
@@ -312,8 +345,7 @@ export class StackChess {
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
             const y = e.clientY - R.y;
-            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
-            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
+            pos(x, y);
         });
         addEventListener("mouseup", e => {
             if (!holdingPiece) return;
