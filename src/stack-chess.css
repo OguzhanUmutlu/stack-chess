@@ -22,7 +22,7 @@
     fill: #EBECD0;
 }
 
-.piece-container {
+.squares {
     position: absolute;
     width: 100%;
     height: 100%;
@@ -37,21 +37,13 @@
 
 .piece {
     position: absolute;
-    width: 100%;
-    height: 100%;
+    width: 12.5%;
+    height: 12.5%;
     background-size: 100% 100%;
     cursor: grab;
-    margin-left: 10px;
-    margin-top: -10px;
-}
-
-.piece:first-child {
-    margin: 0;
+    transition: left 0.5s, top 0.5s;
 }
 
 .dragging-piece {
-    translate: -50% -50%;
-    width: 12.5%;
-    height: 12.5%;
-    margin: 0;
+    transition: none;
 }

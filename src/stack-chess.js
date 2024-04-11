@@ -148,7 +148,8 @@ export class StackChess {
     };
 
     put(x, y, piece) {
-        this.pieces[y * 8 + x].push({type: piece, hasMoved: false});
+        this.pieces[y * 8 + x].unshift(piece = {type: piece, hasMoved: false});
+        if (this.div) this.__renderPut(x, y, piece);
     };
 
     undo() {
@@ -158,9 +159,15 @@ export class StackChess {
             const piece = this.get(move.x2, move.y2)[0];
             if (piece) piece.hasMoved = move.hasMoved;
             this.forceMovePiece(move.x2, move.y2, move.x1, move.y1);
+            if (this.div) {
+                this.__renderMove({type: "move", x1: move.x2, y1: move.y2, x2: move.x1, y2: move.y1});
+            }
         } else if (move.type === "sweep") {
             const sq = this.get(move.x, move.y);
-            sq.unshift(move.captured.map(i => ({type: i[0], hasMoved: i[1]})));
+            sq.push(...move.captured);
+            if (this.div) for (const piece of move.captured) {
+                this.__renderPut(move.x, move.y, piece);
+            }
         }
         this.history.pop();
         this.turn = !this.turn;
@@ -186,13 +193,12 @@ export class StackChess {
         this.get(x2, y2).unshift(piece);
         this.history.push({
             type: "move",
-            piece: piece.type,
-            x1, y1, x2, y2,
-            hasMoved: piece.hasMoved
+            piece: piece,
+            x1, y1, x2, y2
         });
         piece.hasMoved = true;
         this.turn = !this.turn;
-        this.__render();
+        if (this.div) this.__renderMove(piece, x1, y1, x2, y2);
         return true;
     };
 
@@ -203,11 +209,11 @@ export class StackChess {
         this.history.push({
             type: "sweep",
             x, y,
-            captured: sq.slice(1).map(i => [i.type, i.hasMoved])
+            captured: sq.slice(1)
         });
         sq.length = 1;
         this.turn = !this.turn;
-        this.__render();
+        if (this.div) this.__renderSweep(x, y);
     };
 
     isStalemate() {
@@ -244,17 +250,14 @@ export class StackChess {
         this.put(4, 0, "bk");
         this.put(3, 7, "wq");
         this.put(4, 7, "wk");
-        this.__render();
     };
 
     // --- RENDERING ---
 
     setDiv(div, sweepBox) {
         this.div = div;
-        this._piecesDiv = document.createElement("div");
-        this._piecesDiv.classList.add("piece-container");
-        div.appendChild(this._piecesDiv);
-        this.__render();
+
+        this.__rerender();
 
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 
@@ -290,77 +293,127 @@ export class StackChess {
         sweepBox.addEventListener("mouseenter", () => hoveringSweep = true);
         sweepBox.addEventListener("mouseleave", () => hoveringSweep = false);
         addEventListener("mousedown", e => {
-            let target = e.target;
-            if (!target.classList.contains("piece")) return;
-            target = Array.from(e.target.parentElement.children).at(-1);
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
             const y = e.clientY - R.y;
-            holdingStart = [Math.floor(x / R.width * 8), Math.floor(y / R.height * 8)];
-            const piece = this.get(holdingStart[0], holdingStart[1])[0];
-            if ((piece.type[0] === "w") !== this.turn) return;
-            holdingPiece = target;
-            target.style.left = Math.max(0, Math.min(R.width, x)) + "px";
-            target.style.top = Math.max(0, Math.min(R.height, y)) + "px";
-            target.classList.add("dragging-piece");
-            target.parentElement.parentElement.appendChild(target);
+            const X = Math.floor(x / R.width * 8);
+            const Y = Math.floor(y / R.height * 8);
+            if (X < 0 || Y < 0 || X > 7 || Y > 7) return;
+            holdingStart = [X, Y];
+            const piece = this.get(X, Y)[0];
+            if (!piece || (piece.type[0] === "w") !== this.turn) return;
+            holdingPiece = document.querySelector(`[piece-x="${X}"][piece-y="${Y}"][piece-index="0"]`);
+            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
+            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
+            holdingPiece.classList.add("dragging-piece");
         });
         addEventListener("mousemove", e => {
             if (!holdingPiece) return;
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
             const y = e.clientY - R.y;
-            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) + "px";
-            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) + "px";
+            holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
+            holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
         });
-        addEventListener("mouseup", async e => {
+        addEventListener("mouseup", e => {
             if (!holdingPiece) return;
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
             const y = e.clientY - R.y;
+            const X1 = holdingStart[0];
+            const Y1 = holdingStart[1];
+            const piece = this.pieces[Y1 * 8 + X1][0];
             if (hoveringSweep) {
-                this.sweepPiece(holdingStart[0], holdingStart[1]);
+                this.sweepPiece(X1, Y1);
                 const move = this.history.at(-1);
-                for (let i = 0; i < move.captured.length; i++) {
-                    CAPTURE.currentTime = 0;
-                    CAPTURE.play().then(r => r);
-                    await new Promise(r => setTimeout(r, 200));
-                }
+                (async () => {
+                    for (let i = 0; i < move.captured.length; i++) {
+                        CAPTURE.currentTime = 0;
+                        CAPTURE.play().then(r => r);
+                        await new Promise(r => setTimeout(r, 200));
+                    }
+                })();
             } else {
                 const X2 = Math.floor(x / R.width * 8);
                 const Y2 = Math.floor(y / R.height * 8);
-                if (holdingStart[0] !== X2 || holdingStart[1] !== Y2) {
+                if (X1 !== X2 || Y1 !== Y2) {
                     if (this.movePiece(
-                        holdingStart[0], holdingStart[1], X2, Y2
+                        X1, Y1, X2, Y2
                     )) {
                         MOVE.play().then(r => r);
                     } else {
-                        this.__render();
+                        this.__renderSetPos(holdingPiece, X1, Y1, piece);
                         ILLEGAL.play().then(r => r);
                     }
-                } else this.__render();
+                } else this.__renderSetPos(holdingPiece, X1, Y1, piece);
             }
+            holdingPiece.classList.remove("dragging-piece")
             holdingPiece = null;
         });
     };
 
     flip() {
         this._flipped = !this._flipped;
-        this.__render();
+        for (const div of document.querySelector(".piece")) {
+            const x = div.getAttribute("piece-x") * 1;
+            const y = div.getAttribute("piece-y") * 1;
+            const index = div.getAttribute("piece-index") * 1;
+            this.__renderSetPos(
+                div,
+                x,
+                y,
+                this.pieces[y * 8 + x][index]
+            );
+        }
     };
 
-    __render() {
-        if (!this.div) return;
-        let html = "";
-        for (let i = 0; i < 64; i++) {
-            const x = i % 8;
-            const y = Math.floor(i / 8);
-            const pieces = this.pieces[i];
-            // Not the best approach, but it's 4am
-            html += `<div class="square" style="left:${12.5 * x}%;top:${12.5 * (this._flipped ? 7 - y : y)}%">
-${pieces.map(i => `<div class="piece" style="background-image:url('./assets/pieces/${i.type}.png')"></div>`).reverse().join("")}
-</div>`;
+    __rerender() {
+        for (const div of document.querySelectorAll(".piece")) div.remove();
+        for (let i = 0; i < 64; i++) for (const piece of this.pieces[i]) {
+            this.__renderPut(i % 8, Math.floor(i / 8), piece);
         }
-        this._piecesDiv.innerHTML = html;
+    };
+
+    __renderPut(x, y, piece) {
+        const div = document.createElement("div");
+        div.classList.add("piece");
+        this.__renderSetPos(div, x, y, piece);
+        this.div.appendChild(div);
+    };
+
+    __renderSetPos(div, x, y, piece) {
+        const pieces = this.pieces[y * 8 + x];
+        const index = pieces.indexOf(piece);
+        const rIndex = pieces.length - 1 - index;
+        div.style.backgroundImage = `url("./assets/pieces/${piece.type}.png")`;
+        div.style.left = `calc(${12.5 * x}% + ${rIndex * 5}px)`;
+        div.style.top = `calc(${12.5 * (this._flipped ? 7 - y : y)}% - ${rIndex * 5}px)`;
+        div.style.zIndex = rIndex * 10 + "";
+        div.setAttribute("piece-x", x);
+        div.setAttribute("piece-y", y);
+        div.setAttribute("piece-index", index);
+    };
+
+    __renderSweep(x, y) {
+        for (const div of document.querySelectorAll(`[piece-x="${x}"][piece-y="${y}"]`)) {
+            const index = div.getAttribute("piece-index") * 1;
+            if (index !== 0) div.remove();
+            else this.__renderSetPos(div, x, y, this.pieces[y * 8 + x][0]);
+        }
+    };
+
+    __renderMove(piece, x1, y1, x2, y2) {
+        if (!this.div) return;
+        const divO = document.querySelector(`[piece-x="${x1}"][piece-y="${y1}"][piece-index="0"]`);
+        for (const div of document.querySelectorAll(`[piece-x="${x1}"][piece-y="${y1}"]`)) {
+            if (div === divO) continue;
+            const oIndex = div.getAttribute("piece-index") * 1;
+            div.setAttribute("piece-index", oIndex - 1 + "");
+        }
+        for (const div of document.querySelectorAll(`[piece-x="${x2}"][piece-y="${y2}"]`)) {
+            const oIndex = div.getAttribute("piece-index") * 1;
+            div.setAttribute("piece-index", oIndex + 1 + "");
+        }
+        this.__renderSetPos(divO, x2, y2, piece);
     };
 }
