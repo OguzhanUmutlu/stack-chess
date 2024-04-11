@@ -91,7 +91,9 @@ const GetAllMoveList = {
         const otherKing = board.getKingPosition(piece.type[0] === "b");
         const noSquares = otherKing ? __getKingSquares(otherKing[0], otherKing[1]) : [];
         for (const [vx, vy] of __getKingSquares(x, y)) {
-            if (noSquares.some(i => i[0] === vx && i[1] === vy)) continue;
+            if (noSquares.some(i => i[0] === vx && i[1] === vy)) {
+                continue;
+            }
             mv(vx, vy);
         }
 
@@ -127,7 +129,7 @@ export class StackChess {
     getKingPosition(team) {
         for (let i = 0; i < 64; i++) {
             const sq = this.pieces[i];
-            if (sq.some(i => i.type === (team ? "w" : "b") + "k")) return [Math.floor(i / 8), i % 8];
+            if (sq.some(i => i.type === (team ? "w" : "b") + "k")) return [i % 8, Math.floor(i / 8)];
         }
         return null;
     };
@@ -182,14 +184,18 @@ export class StackChess {
         this.get(x2, y2).unshift(piece);
     };
 
-    movePiece(x1, y1, x2, y2, promotion = "q") { // todo: promotion, en passant, castling
+    canMove(x1, y1, x2, y2) {
         const sq = this.get(x1, y1);
         const piece = sq[0];
-        if (
-            !piece
-            || piece.type[0] !== (this.turn ? "w" : "b")
-            || !this.getMovesOf(x1, y1).some(i => i[0] === x2 && i[1] === y2)
-        ) return false;
+        return piece
+            && piece.type[0] === (this.turn ? "w" : "b")
+            && this.getMovesOf(x1, y1).some(i => i[0] === x2 && i[1] === y2);
+    };
+
+    movePiece(x1, y1, x2, y2, promotion = "q") {
+        const sq = this.get(x1, y1);
+        const piece = sq[0];
+        if (!this.canMove(x1, y1, x2, y2)) return false;
         sq.shift();
         this.get(x2, y2).unshift(piece);
         const isPromotion = piece.type[1] === "p" && y2 === (piece.type[0] === "w" ? 0 : 7);
@@ -326,6 +332,31 @@ export class StackChess {
             holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
         };
 
+        const promoteListeners = [];
+        for (const d of document.querySelectorAll(".promote-options > div")) {
+            d.addEventListener("click", () => {
+                promoteListeners.forEach(i => i(d.getAttribute("data-promote")));
+                promoteListeners.length = 0;
+            });
+        }
+
+        function showPromotionMenu(piece) {
+            return new Promise(r => {
+                const pDiv = document.querySelector(".promotion-menu");
+                pDiv.style.opacity = "1";
+                pDiv.style.pointerEvents = "all";
+                promoteListeners.push(t => {
+                    pDiv.style.opacity = "0";
+                    pDiv.style.pointerEvents = "none";
+                    r(t);
+                });
+                for (const d of document.querySelectorAll(".promote-options > div")) {
+                    const t = d.getAttribute("data-promote");
+                    d.style.backgroundImage = `url("./assets/pieces/${piece.type[0] + t}.png")`;
+                }
+            });
+        }
+
         addEventListener("mousedown", e => {
             const R = div.getBoundingClientRect();
             const x = e.clientX - R.x;
@@ -369,10 +400,19 @@ export class StackChess {
                 const X2 = Math.floor(x / R.width * 8);
                 const Y2 = Math.floor(y / R.height * 8);
                 if (X1 !== X2 || Y1 !== Y2) {
-                    if (this.movePiece(
-                        X1, Y1, X2, Y2
-                    )) {
-                        MOVE.play().then(r => r);
+                    if (this.canMove(X1, Y1, X2, Y2)) {
+                        (async () => {
+                            const div = holdingPiece;
+                            const isPromotion = piece.type[1] === "p" && Y2 === (piece.type[0] === "w" ? 0 : 7);
+                            let promotion = "q";
+                            if (isPromotion) {
+                                this.__renderSetPos(div, X2, Y2, piece);
+                                promotion = await showPromotionMenu(piece);
+                                this.__renderSetPos(div, X1, Y1, piece);
+                            }
+                            this.movePiece(X1, Y1, X2, Y2, promotion);
+                            await MOVE.play();
+                        })();
                     } else {
                         this.__renderSetPos(holdingPiece, X1, Y1, piece);
                         ILLEGAL.play().then(r => r);

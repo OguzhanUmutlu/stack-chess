@@ -10,7 +10,19 @@
     <title>Stack Chess</title>
 </head>
 <body>
-<div class="board"></div>
+<div class="board">
+    <div class="promotion-menu">
+        <div class="promote">
+            <div class="text">Pick a piece to promote your pawn to:</div>
+            <div class="promote-options">
+                <div data-promote="q"></div>
+                <div data-promote="r"></div>
+                <div data-promote="b"></div>
+                <div data-promote="n"></div>
+            </div>
+        </div>
+    </div>
+</div>
 <div class="sweep-box">Hover your piece to here to <i>sweep</i>!</div>
 </body>
 <script type="module">
@@ -21,14 +33,6 @@
         document.querySelector(".board"),
         document.querySelector(".sweep-box")
     );
-    game.put(5, 5, "bk");
-    game.put(4, 7, "wk");
-    game.put(7, 7, "wr");
-    game.put(0, 7, "wr");
-    game.put(5, 3, "wp");
-    game.put(4, 1, "bp");
-    game.put(6, 3, "wp");
-    game.movePiece(4, 7, 3, 7);
-    game.movePiece(4, 1, 4, 3);
+    game.reset();
 </script>
 </html>
