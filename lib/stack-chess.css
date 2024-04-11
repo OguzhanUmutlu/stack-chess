@@ -2,8 +2,8 @@
     font-family: system-ui, sans-serif;
     position: absolute;
     left: 50%;
-    bottom: 5%;
-    translate: -50%;
+    top: 50%;
+    translate: -50% -50%;
     height: 80%;
     aspect-ratio: 1 / 1;
     background: url("../assets/board.png");
@@ -60,7 +60,7 @@
     z-index: 10000 !important;
 }
 
-.promotion-menu {
+.promotion-menu, .end-menu {
     position: absolute;
     left: 0;
     top: 0;
@@ -106,19 +106,6 @@
     background-color: rgba(235, 236, 208, 0.8);
 }
 
-.end-menu {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 10001;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.5s;
-}
-
 .end-container {
     position: absolute;
     left: 50%;
@@ -130,6 +117,9 @@
     white-space: nowrap;
     background: rgba(235, 236, 208, 0.8);
     text-align: center;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
 }
 
 .end-container > .big-text {
@@ -139,4 +129,18 @@
 
 .end-container > .text {
     margin-top: 15px;
+}
+
+.ch-btn {
+    width: max-content;
+    padding: 5px 10px;
+    border-radius: 5px;
+    background: #b5b6a5;
+    margin-top: 15px;
+    cursor: pointer;
+}
+
+.ch-btn:hover {
+    background: #6c6c61;
+    color: white;
 }

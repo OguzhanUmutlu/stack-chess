@@ -1,28 +1,26 @@
-# stack-chess
-
-Stack Chess API. More information: https://www.chess.com/forum/view/general/stack-chess
-
-# Example usage
-
-```html
-
-<link rel="stylesheet" href="./lib/stack-chess.css">
-<title>Stack Chess</title>
-
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="./lib/stack-chess.css">
+    <script src="./lib/stack-chess.js"></script>
+    <title>Stack Chess</title>
+</head>
+<body>
 <div class="board"></div>
 <div class="sweep-box">Drag your piece here to <i>sweep</i> it!</div>
-
+</body>
 <script type="module">
-    import {StackChess} from "./lib/stack-chess.js";
-
     const game = new StackChess;
     game.setDiv(
-            document.querySelector(".board"),
-            document.querySelector(".sweep-box")
+        document.querySelector(".board"),
+        document.querySelector(".sweep-box")
     );
     game.reset();
 </script>
-
 <style>
     body {
         font-family: system-ui, sans-serif;
@@ -33,9 +31,8 @@ Stack Chess API. More information: https://www.chess.com/forum/view/general/stac
 
     .sweep-box {
         position: absolute;
-        top: 4%;
-        left: 50%;
-        translate: -50%;
+        bottom: 20px;
+        left: 20px;
         padding: 1%;
         background: #b2afaf;
         border-radius: 10px;
@@ -46,8 +43,4 @@ Stack Chess API. More information: https://www.chess.com/forum/view/general/stac
         cursor: pointer;
     }
 </style>
-```
-
-# API
-
-TODO.
+</html>
