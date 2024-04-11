@@ -88,12 +88,10 @@ const GetAllMoveList = {
         ], x, y, board, mv);
     },
     k(piece, x, y, board, mv) {
-        const otherKing = board.getKingPosition(piece.type[0] === "b");
-        const noSquares = otherKing ? __getKingSquares(otherKing[0], otherKing[1]) : [];
+        //const otherKing = board.getKingPosition(piece.type[0] === "b");
+        //const noSquares = otherKing ? __getKingSquares(otherKing[0], otherKing[1]) : [];
         for (const [vx, vy] of __getKingSquares(x, y)) {
-            if (noSquares.some(i => i[0] === vx && i[1] === vy)) {
-                continue;
-            }
+            // if (noSquares.some(i => i[0] === vx && i[1] === vy)) continue;
             mv(vx, vy);
         }
 
@@ -105,7 +103,7 @@ const GetAllMoveList = {
                     && board.history.every(i => i.type !== "move" || i.piece !== rook || i.x1 !== X || i.y1 !== y)
                     && rook[0].type === piece.type[0] + "r"
                 ) {
-                    if (noSquares.some(i => i[0] === x + 2 && i[1] === y)) continue;
+                    // if (noSquares.some(i => i[0] === x + 2 && i[1] === y)) continue;
                     mv(x + dx, y);
                 }
             }
@@ -250,13 +248,20 @@ export class StackChess {
     };
 
     isStalemate() {
-        // only king
+        for (let i = 0; i < 64; i++) {
+            const p = this.pieces[i][0];
+            if (!p || p.type[0] !== (this.turn ? "w" : "b")) continue;
+            if (this.getMovesOf(i % 8, Math.floor(i / 8)).length) return false;
+        }
+        return true;
     };
 
-    isVictory() {
+    getVictory() {
         const move = this.history.at(-1);
-        if (!move) return;
-
+        let k;
+        return move && move.type === "sweep"
+            && (k = move.captured.find(i => i.type[1] === "k"))
+            && (k[0] === "w" ? "b" : "w");
     };
 
     clear() {
@@ -293,7 +298,6 @@ export class StackChess {
         this.__rerender();
 
         const promotionMenu = document.createElement("div");
-        div.appendChild(promotionMenu);
         promotionMenu.innerHTML = `<div class="promote">
             <div class="text">Pick a piece to promote your pawn to:</div>
             <div class="promote-options">
@@ -304,6 +308,18 @@ export class StackChess {
             </div>
         </div>`
         promotionMenu.classList.add("promotion-menu");
+        div.appendChild(promotionMenu);
+
+        const endMenu = document.createElement("div");
+        endMenu.innerHTML = `<div class="end-container">
+            <div class="big-text"></div>
+            <div class="text"></div>
+        </div>`
+        endMenu.classList.add("end-menu");
+        div.appendChild(endMenu);
+        this._endMenu = endMenu;
+        this._bigT = endMenu.querySelector(".big-text");
+        this._smallT = endMenu.querySelector(".text");
 
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 
@@ -400,6 +416,7 @@ export class StackChess {
             const piece = this.pieces[Y1 * 8 + X1][0];
             if (hoveringSweep) {
                 this.sweepPiece(X1, Y1);
+                this.__checkEnd();
                 const move = this.history.at(-1);
                 (async () => {
                     for (let i = 0; i < move.captured.length; i++) {
@@ -423,6 +440,7 @@ export class StackChess {
                                 this.__renderSetPos(div, X1, Y1, piece);
                             }
                             this.movePiece(X1, Y1, X2, Y2, promotion);
+                            this.__checkEnd();
                             await MOVE.play();
                         })();
                     } else {
@@ -499,5 +517,19 @@ export class StackChess {
             div.setAttribute("piece-index", oIndex + 1 + "");
         }
         this.__renderSetPos(divO, x2, y2, piece);
+    };
+
+    __checkEnd() {
+        const end = (b, s) => {
+            this._endMenu.style.opacity = "1";
+            this._endMenu.style.pointerEvents = "all";
+            this._smallT.innerText = s;
+            this._bigT.innerText = b;
+        };
+
+        const stalemate = this.isStalemate();
+        if (stalemate) return end("Draw", "by stalemate");
+        const victory = this.getVictory();
+        if (victory) return end((victory === "w" ? "White" : "Black") + " wins", "by king capture");
     };
 }

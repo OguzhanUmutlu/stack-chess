@@ -1,4 +1,5 @@
 .board {
+    font-family: system-ui, sans-serif;
     position: absolute;
     left: 50%;
     bottom: 5%;
@@ -93,4 +94,34 @@
 
 .promote-options > div:hover {
     background-color: rgba(235, 236, 208, 0.8);
+}
+
+.end-menu {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10001;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s;
+}
+
+.end-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    padding: 30px 40px;
+    border-radius: 10px;
+    color: black;
+    white-space: nowrap;
+    background: rgba(235, 236, 208, 0.8);
+    text-align: center;
+}
+
+.end-container > .big-text {
+    font-size: 30px;
 }
