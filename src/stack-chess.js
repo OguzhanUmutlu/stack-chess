@@ -27,6 +27,9 @@ function __getKingSquares(x, y) {
     ].map(i => [i[0] + x, i[1] + y]);
 }
 
+const __X_NAMES = ["a", "b", "c", "d", "e", "f", "g", "h"];
+const __Y_NAMES = ["8", "7", "6", "5", "4", "3", "2", "1"];
+
 const GetAllMoveList = {
     p(piece, x, y, board, mv) {
         const k = piece.type[0] === "w" ? -1 : 1;
@@ -95,19 +98,9 @@ const GetAllMoveList = {
             mv(vx, vy);
         }
 
-        if (board.history.every(i => i[0] !== "move" || i[1] !== piece.type[0] + "k")) {
-            for (const [X, dx] of [[0, -2], [7, 2]]) {
-                const rook = board.get(X, y);
-                if (
-                    rook.length === 1
-                    && board.history.every(i => i.type !== "move" || i.piece !== rook || i.x1 !== X || i.y1 !== y)
-                    && rook[0].type === piece.type[0] + "r"
-                ) {
-                    // if (noSquares.some(i => i[0] === x + 2 && i[1] === y)) continue;
-                    mv(x + dx, y);
-                }
-            }
-        }
+        const state = board.getCastleState(piece.type[0] === "w");
+        if (state.queenside) mv(x - 2, y);
+        if (state.kingside) mv(x + 2, y);
     }
 };
 
@@ -115,9 +108,34 @@ export class StackChess {
     _flipped = false;
     turn = true;
     div = null;
+    ruleMoves = 0;
 
     constructor() {
         this.clear();
+    };
+
+    /**
+     * @param {boolean} team
+     * @return {{kingside: boolean, queenside: boolean}}
+     */
+    getCastleState(team) {
+        const king = this.getKing(team);
+        const [_, y] = this.getKingPosition(team);
+        const state = {};
+        if (this.history.every(i => i[0] !== "move" || i[1] !== king.type[0] + "k")) {
+            for (const [X, p] of [[0, "queenside"], [7, "kingside"]]) {
+                const rook = this.get(X, y);
+                if (
+                    rook.length === 1
+                    && this.history.every(i => i.type !== "move" || i.piece !== rook || i.x1 !== X || i.y1 !== y)
+                    && rook[0].type === king.type[0] + "r"
+                ) {
+                    // if (noSquares.some(i => i[0] === x + 2 && i[1] === y)) continue;
+                    state[p] = true;
+                }
+            }
+        }
+        return state;
     };
 
     getKing(team) {
@@ -134,11 +152,11 @@ export class StackChess {
 
     getMovesOf(x, y) {
         const piece = this.get(x, y)[0];
-        if (!piece) return;
+        if (!piece) return [];
         const p = [];
         GetAllMoveList[piece.type[1]](piece, x, y, this, (x, y) => {
-            const get = this.get(x, y)[0];
-            if (!get || get.type[0] !== piece.type[0]) p.push([x, y]);
+            if (x < 0 || x > 7 || y < 0 || y > 7) return;
+            p.push([x, y]);
         });
         return p;
     };
@@ -157,11 +175,17 @@ export class StackChess {
         const move = this.history.at(-1);
         if (!move) return;
         if (move.type === "move") {
-            const piece = this.get(move.x2, move.y2)[0];
-            if (piece) piece.hasMoved = move.hasMoved;
+            move.piece.hasMoved = move.hasMoved;
             this.forceMovePiece(move.x2, move.y2, move.x1, move.y1);
-            if (this.div) {
-                this.__renderMove({type: "move", x1: move.x2, y1: move.y2, x2: move.x1, y2: move.y1});
+            if (move.isPromotion) move.piece.type = move.piece.type[0] + "p";
+            if (move.isCastleRight) {
+                this.forceMovePiece(move.x2 - 1, move.y2, move.x2 + 1, move.y2);
+            }
+            if (move.isCastleLeft) {
+                this.forceMovePiece(move.x2 + 1, move.y2, move.x2 - 2, move.y2);
+            }
+            if (move.isEnPassant) {
+                this.forceMovePiece(move.x2, move.y2, move.x2, move.y1)
             }
         } else if (move.type === "sweep") {
             const sq = this.get(move.x, move.y);
@@ -171,7 +195,15 @@ export class StackChess {
             }
         }
         this.history.pop();
+        this.fenHistory.pop();
         this.turn = !this.turn;
+        if (this.div) {
+            this._endMenu.style.opacity = "0";
+            this._endMenu.style.pointerEvents = "none";
+            this._promoteMenu.style.opacity = "0";
+            this._promoteMenu.style.pointerEvents = "none";
+        }
+        if (this._undoProm) this.__renderSetPos(...this._undoProm)
     };
 
     forceMovePiece(x1, y1, x2, y2) {
@@ -180,6 +212,7 @@ export class StackChess {
         if (!piece) return;
         sq.shift();
         this.get(x2, y2).unshift(piece);
+        if (this.div) this.__renderMove(piece, x1, y1, x2, y2);
     };
 
     canMove(x1, y1, x2, y2) {
@@ -194,42 +227,44 @@ export class StackChess {
         const sq = this.get(x1, y1);
         const piece = sq[0];
         if (!this.canMove(x1, y1, x2, y2)) return false;
-        sq.shift();
-        this.get(x2, y2).unshift(piece);
+
         const isPromotion = piece.type[1] === "p" && y2 === (piece.type[0] === "w" ? 0 : 7);
         const isCastleLeft = piece.type[1] === "k" && x1 - x2 === 2;
         const isCastleRight = piece.type[1] === "k" && x2 - x1 === 2;
-        const isEnPassant = piece.type[1] === "p" && this.get(x2, y2).length === 1 && x1 !== x2;
+        const isEnPassant = piece.type[1] === "p" && this.get(x2, y2).length === 0 && x1 !== x2;
+        const isHalfMove = piece.type[1] === "p";
+
         if (isPromotion) {
             piece.type = piece.type[0] + promotion;
         }
         if (isCastleLeft) {
-            const rook = this.get(0, y2).shift();
-            this.get(3, y2).unshift(rook);
-            if (this.div) this.__renderMove(rook, 0, y2, 3, y2);
+            this.forceMovePiece(0, y2, 3, y2);
         }
         if (isCastleRight) {
-            const rook = this.get(7, y2).shift();
-            this.get(5, y2).unshift(rook);
-            if (this.div) this.__renderMove(rook, 7, y2, 5, y2);
+            this.forceMovePiece(7, y2, 5, y2);
         }
         if (isEnPassant) {
             const mv = this.turn ? -1 : 1;
-            const pawn = this.get(x2, y2 - mv).shift();
-            this.get(x2, y2).push(pawn);
-            if (this.div) this.__renderMove(pawn, x2, y2 - mv, x2, y2);
+            this.forceMovePiece(x2, y2 - mv, x2, y2);
         }
         this.history.push({
             type: "move",
             piece: piece,
             x1, y1, x2, y2,
             isPromotion,
+            isEnPassant,
             isCastleLeft,
-            isCastleRight
+            isCastleRight,
+            ruleMoves: this.ruleMoves
         });
+        this.fenHistory.push(this.stackFen());
+
+        if (isHalfMove) this.ruleMoves = 0;
+        else this.ruleMoves++;
+
         piece.hasMoved = true;
         this.turn = !this.turn;
-        if (this.div) this.__renderMove(piece, x1, y1, x2, y2);
+        this.forceMovePiece(x1, y1, x2, y2);
         return true;
     };
 
@@ -237,11 +272,20 @@ export class StackChess {
         const sq = this.get(x, y);
         const piece = sq[0];
         if (!piece || piece.type[0] !== (this.turn ? "w" : "b")) return;
+
+        const isHalfMove = sq.length > 1;
+
         this.history.push({
             type: "sweep",
             x, y,
-            captured: sq.slice(1)
+            captured: sq.slice(1),
+            ruleMoves: this.ruleMoves
         });
+
+        if (isHalfMove) this.ruleMoves = 0;
+        else this.ruleMoves++;
+
+        this.fenHistory.push(this.stackFen());
         sq.length = 1;
         this.turn = !this.turn;
         if (this.div) this.__renderSweep(x, y);
@@ -256,6 +300,24 @@ export class StackChess {
         return true;
     };
 
+    is50MoveRule() {
+        return this.ruleMoves >= 100;
+    };
+
+    isRepetition() {
+        const last = this.fenHistory.at(-1);
+        return last && this.fenHistory.filter(i => i === last).length >= 3;
+    };
+
+    isInsufficientMaterial() {
+        const wKing = this.getKing(true);
+        const bKing = this.getKing(false);
+        const p = this.pieces.flat();
+        const wP = p.filter(i => i.type[0] === "w");
+        const bP = p.filter(i => i.type[0] === "b");
+        return wKing && bKing && wP.length === 1 && bP.length === 1;
+    };
+
     getVictory() {
         const move = this.history.at(-1);
         let k;
@@ -267,6 +329,7 @@ export class StackChess {
     clear() {
         this.pieces = Array(64).fill(0).map(() => []);
         this.history = [];
+        this.fenHistory = [];
     };
 
     reset() {
@@ -297,6 +360,19 @@ export class StackChess {
 
         this.__rerender();
 
+        const onResize = () => {
+            const isMobile = innerWidth < innerHeight;
+            this.div.style.width = isMobile ? "80%" : "auto";
+            this.div.style.height = isMobile ? "auto" : "80%";
+            this.div.style.bottom = isMobile ? "auto" : "5%";
+            this.div.style.top = isMobile ? "50%" : "auto";
+            this.div.style.translate = isMobile ? "-50% -50%" : "-50%";
+            const R = div.getBoundingClientRect();
+            canvas.width = R.width;
+            canvas.height = R.height;
+        };
+        addEventListener("resize", onResize);
+
         const promotionMenu = document.createElement("div");
         promotionMenu.innerHTML = `<div class="promote">
             <div class="text">Pick a piece to promote your pawn to:</div>
@@ -309,6 +385,7 @@ export class StackChess {
         </div>`
         promotionMenu.classList.add("promotion-menu");
         div.appendChild(promotionMenu);
+        this._promoteMenu = promotionMenu;
 
         const endMenu = document.createElement("div");
         endMenu.innerHTML = `<div class="end-container">
@@ -345,6 +422,12 @@ export class StackChess {
 
         div.appendChild(svg);
 
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        div.appendChild(canvas);
+
+        onResize();
+
         const ILLEGAL = new Audio("./assets/illegal.webm");
         const MOVE = new Audio("./assets/move.webm");
         const CAPTURE = new Audio("./assets/capture.webm");
@@ -352,10 +435,28 @@ export class StackChess {
         let holdingPiece = null;
         let holdingStart = null;
         let hoveringSweep = false;
+        const cacheClient = {x: 0, y: 0};
+        let selectedPiece = null;
+        let mouseMoved = false;
         sweepBox.addEventListener("mouseenter", () => hoveringSweep = true);
         sweepBox.addEventListener("mouseleave", () => hoveringSweep = false);
 
-        const pos = (x, y) => {
+        const renderCanvas = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (selectedPiece) {
+                const moves = this.getMovesOf(selectedPiece[0], selectedPiece[1]);
+                if (moves.length) for (const [x, y] of moves) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = "rgba(84, 84, 84, 0.5)";
+                    ctx.lineWidth = 5;
+                    ctx.arc((x + 0.5) * canvas.width / 8, (y + 0.5) * canvas.height / 8, canvas.width / 48, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+            }
+        };
+
+        const doPos = (x, y) => {
             const R = div.getBoundingClientRect();
             holdingPiece.style.left = Math.max(0, Math.min(R.width, x)) - R.width / 16 + "px";
             holdingPiece.style.top = Math.max(0, Math.min(R.height, y)) - R.height / 16 + "px";
@@ -385,34 +486,51 @@ export class StackChess {
             });
         }
 
-        addEventListener("mousedown", e => {
+        const onMouseDown = (clientX, clientY) => {
+            mouseMoved = false;
+            cacheClient.x = clientX;
+            cacheClient.y = clientY;
             const R = div.getBoundingClientRect();
-            const x = e.clientX - R.x;
-            const y = e.clientY - R.y;
+            const x = clientX - R.x;
+            const y = clientY - R.y;
             const X = Math.floor(x / R.width * 8);
             const Y = Math.floor(y / R.height * 8);
             if (X < 0 || Y < 0 || X > 7 || Y > 7) return;
-            holdingStart = [X, Y];
             const piece = this.get(X, Y)[0];
+            if (!piece || (piece.type[0] === "w") !== this.turn) {
+                selectedPiece = null;
+                renderCanvas();
+                return;
+            }
+            holdingStart = [X, Y];
+            selectedPiece = [X, Y];
+            renderCanvas();
             if (!piece || (piece.type[0] === "w") !== this.turn) return;
             holdingPiece = document.querySelector(`[piece-x="${X}"][piece-y="${Y}"][piece-index="0"]`);
-            pos(x, y);
             holdingPiece.classList.add("dragging-piece");
-        });
-        addEventListener("mousemove", e => {
+        }
+
+        const onMouseMove = (clientX, clientY) => {
+            mouseMoved = true;
+            cacheClient.x = clientX;
+            cacheClient.y = clientY;
             if (!holdingPiece) return;
             const R = div.getBoundingClientRect();
-            const x = e.clientX - R.x;
-            const y = e.clientY - R.y;
-            pos(x, y);
-        });
-        addEventListener("mouseup", e => {
+            const x = clientX - R.x;
+            const y = clientY - R.y;
+            doPos(x, y);
+        };
+
+        const onMouseUp = () => {
+            mouseMoved = false;
             if (!holdingPiece) return;
             const R = div.getBoundingClientRect();
-            const x = e.clientX - R.x;
-            const y = e.clientY - R.y;
+            const x = cacheClient.x - R.x;
+            const y = cacheClient.y - R.y;
             const X1 = holdingStart[0];
             const Y1 = holdingStart[1];
+            const X2 = Math.floor(x / R.width * 8);
+            const Y2 = Math.floor(y / R.height * 8);
             const piece = this.pieces[Y1 * 8 + X1][0];
             if (hoveringSweep) {
                 this.sweepPiece(X1, Y1);
@@ -426,8 +544,6 @@ export class StackChess {
                     }
                 })();
             } else {
-                const X2 = Math.floor(x / R.width * 8);
-                const Y2 = Math.floor(y / R.height * 8);
                 if (X1 !== X2 || Y1 !== Y2) {
                     if (this.canMove(X1, Y1, X2, Y2)) {
                         (async () => {
@@ -436,7 +552,9 @@ export class StackChess {
                             let promotion = "q";
                             if (isPromotion) {
                                 this.__renderSetPos(div, X2, Y2, piece);
+                                this._undoProm = [div, X1, Y1, piece];
                                 promotion = await showPromotionMenu(piece);
+                                this._undoProm = null;
                                 this.__renderSetPos(div, X1, Y1, piece);
                             }
                             this.movePiece(X1, Y1, X2, Y2, promotion);
@@ -449,9 +567,17 @@ export class StackChess {
                     }
                 } else this.__renderSetPos(holdingPiece, X1, Y1, piece);
             }
+            renderCanvas();
             holdingPiece.classList.remove("dragging-piece")
             holdingPiece = null;
-        });
+        };
+
+        addEventListener("mousedown", e => onMouseDown(e.clientX, e.clientY));
+        addEventListener("mousemove", e => onMouseMove(e.clientX, e.clientY));
+        addEventListener("mouseup", () => onMouseUp());
+        addEventListener("touchstart", e => onMouseDown(e.touches[0].clientX, e.touches[0].clientY));
+        addEventListener("touchmove", e => onMouseMove(e.touches[0].clientX, e.touches[0].clientY));
+        addEventListener("touchend", () => onMouseUp());
     };
 
     flip() {
@@ -527,9 +653,52 @@ export class StackChess {
             this._bigT.innerText = b;
         };
 
-        const stalemate = this.isStalemate();
-        if (stalemate) return end("Draw", "by stalemate");
+        if (this.isStalemate()) return end("Draw", "by stalemate");
+        if (this.is50MoveRule()) return end("Draw", "by the 50 move rule");
+        if (this.isRepetition()) return end("Draw", "by repetition");
+        if (this.isInsufficientMaterial()) return end("Draw", "by insufficient material");
+
         const victory = this.getVictory();
         if (victory) return end((victory === "w" ? "White" : "Black") + " wins", "by king capture");
+    };
+
+    stackFenRaw() {
+        const S = [];
+        let empty = 0;
+        for (let i = 0; i < 64; i++) {
+            const p = this.pieces[i];
+            if (p.length === 0) {
+                empty++;
+                continue;
+            }
+            if (empty > 0) {
+                S.push(empty);
+                empty = 0;
+            }
+            S.push(p.map(i => i.type[0] === "w" ? i.type[1].toUpperCase() : i.type[1]).join(""));
+        }
+        return S.join("/");
+    };
+
+    stackFen() {
+        const wCastle = this.getCastleState(true);
+        const bCastle = this.getCastleState(false);
+        const fields = [
+            this.stackFenRaw(),
+            this.turn ? "w" : "b",
+            wCastle.queenside || wCastle.kingside ? "" : "-",
+            bCastle.queenside || bCastle.kingside ? "" : "-",
+            "-",
+            this.ruleMoves.toString()
+        ];
+        if (wCastle.queenside) fields[2] += "Q";
+        if (wCastle.kingside) fields[2] += "K";
+        if (bCastle.queenside) fields[3] += "Q";
+        if (bCastle.kingside) fields[3] += "K";
+        const last = this.history.at(-1);
+        if (last && last.type === "move" && last.piece.type[1] === "p" && Math.abs(last.y1 - last.y2) === 2) {
+            fields[4] = __X_NAMES[last.x2] + __Y_NAMES[last.y2];
+        }
+        return fields.join(" ");
     };
 }
